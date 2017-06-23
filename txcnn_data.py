@@ -133,68 +133,74 @@ def next_batch(data,label,batch_size):
 
     
     
-def image_augment_serialize(data,label,num):
+def image_augment(data,label,num):
     sess = tf.InteractiveSession()
-    
     data_aug=np.zeros((num*4,256,256,1))
     label_aug=np.zeros((num*4,2))
+    data=data.reshape(num,256,256,1)
     data=tf.convert_to_tensor(data,dtype=tf.float32)
     label=tf.convert_to_tensor(label,dtype=tf.float32)
-    img=tf.Variable(tf.zeros([256,256]))
-    img1=tf.Variable(tf.zeros([256,256,1]))
-    img2=tf.Variable(tf.zeros([256,256,1]))
-    l=tf.Variable(tf.zeros([2,2]))
+    
+    data_ts=tf.Variable(tf.zeros([1,256,256,1]),dtype=tf.float32)
+    label_ts=tf.Variable(tf.zeros([1,2]),dtype=tf.float32)
+    
     tf.global_variables_initializer().run()
-    j=0
     print('data aumenting......')
-    start=time.time()
+    start=time.time()        
     for i in range(num):
         s=time.time()
         print('augumenting image:',i)
         img=data[i]
-        im1=tf.reshape(img,[256,256,1])
-        l=label[i]
-        data_aug[j]=img1.eval()
-        label_aug[j]=l.eval()
-        j=j+1
-        
-        a=time.time()
-        img2=tf.image.transpose_image(img1)    #对角线翻转 
-        
-        b=time.time()
-        print('time tf.image.transpose_image',b-a)
-        data_aug[j]=img2.eval()
-        c=time.time()
-        print('time img2.eval',c-b)
-        label_aug[j]=l.eval()
-        d=time.time()
-        print('time l.eval',d-c)
-        j=j+1
-        
-        img2=tf.image.random_flip_left_right(img1)   #随机左右翻转 
-        data_aug[j]=img2.eval()
-        label_aug[j]=l.eval()
-        j=j+1
-        
-        img2=tf.image.random_flip_up_down(img1)      #随机上下翻转
-        data_aug[j]=img2.eval()
-        label_aug[j]=l.eval()
-        j=j+1
-        print('finished image:',i,'time:',time.time()-s)
+        img1=tf.reshape(img,[1,256,256,1])
+        l=tf.reshape(label[i],[1,2])
+        data_ts=tf.concat([data_ts,img1],0)
+        label_ts=tf.concat([label_ts,l],0)
 
-    if j!=num*4:
-        print('error!!!!!!\n\n')
+        a=time.time()
+        img=tf.image.transpose_image(data[i])    #对角线翻转 
+        img1=tf.reshape(img,[1,256,256,1])
+        data_ts=tf.concat([data_ts,img1],0)
+        label_ts=tf.concat([label_ts,l],0)
+
+        img=tf.image.random_flip_left_right(data[i])   #随机左右翻转 
+        img1=tf.reshape(img,[1,256,256,1])
+        data_ts=tf.concat([data_ts,img1],0)
+        label_ts=tf.concat([label_ts,l],0)
+
+        img=tf.image.random_flip_up_down(data[i])      #随机上下翻转
+        img1=tf.reshape(img,[1,256,256,1])
+        data_ts=tf.concat([data_ts,img1],0)
+        label_ts=tf.concat([label_ts,l],0)
+        
+        print('finished image:',i,'time:',time.time()-s)   
+    
+    data_np=data_ts[1:num*4+1]
+    label_np=label_ts[1:num*4+1]
+    data_np = data_np.eval()
+    label_np = label_np.eval()
     print('data augmenting is finished','it take time:',time.time()-start)
-    with open('./data/training_data_aug.pkl','wb') as f:
-        print('save data serialization')
-        pickle.dump(data_aug,f)
+    print(data_np.shape,label_np.shape)
+    return data_np,label_np
+
+def image_augment_serialize(training_data,training_label,num):
+    data=np.zeros((num*4,256,256,1))
+    label=np.zeros((num*4,2))
+    for i in range(int(num/1000)):
+        data[i*4000:(i+1)*4000],label[i*4000:(i+1)*4000] = image_augment(
+                                            training_data[i*1000:(i+1)*1000],training_label[i*1000:(i+1)*1000],1000)
+    
+    data=data.reshape(num*4,256,256)
+    for i in range(int(num*4/2000)):
+        with open('./data/training_data_aug'+str(i)+'.pkl','wb') as f:
+            print('save data serialization num',i)
+            pickle.dump(data[i*2000:(i+1)*2000],f)
     with open('./data/training_label_aug.pkl','wb') as f:
         print('save label serialization')
-        pickle.dump(label_aug,f)
-
+        pickle.dump(label,f)
+        
 '''   
 train,train_label,valid,valid_label=sample(training_data,training_label,2800,2500/3000,2500/300)
 train=train.reshape(2800,256*256)
 valid=valid.reshape(200,256*256)
 '''
-train_aug,train_label_aug=image_augment_serialize(training_data,training_label,3000)
+image_augment_serialize(training_data,training_label,3000)
