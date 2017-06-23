@@ -2,8 +2,6 @@ import pickle
 import numpy as np
 import cv2 as cv
 import random
-import tensorflow as tf
-import time
 def unpickle(file):
     with open(file,'rb') as f:
         data=np.array([])
@@ -115,8 +113,8 @@ def sample(data,label,num_samples,positive_ratio,positive_negative_sample_ratio=
         
 def next_batch(data,label,batch_size):
     num_data=data.shape[0]
-    index1=random.sample(range(10000),int(batch_size/2))
-    index2=random.sample(range(10000,11200),int(batch_size/2))
+    index1=random.sample(range(2500),int(batch_size/2))
+    index2=random.sample(range(2500,2800),int(batch_size/2))
     batch_data=np.zeros((batch_size,256*256))
     batch_label=np.zeros((batch_size,2))
     j=0
@@ -131,59 +129,22 @@ def next_batch(data,label,batch_size):
     return batch_data,batch_label    
 
 
-    
-    
-def image_augment(data,label,num):
-    data_aug=np.zeros((num*4,256,256,1))
-    label_aug=np.zeros((num*4,2))
-    data=tf.convert_to_tensor(data,dtype=tf.float32)
-    label=tf.convert_to_tensor(label,dtype=tf.float32)
-    j=0
-    print('data aumenting......')
-    start=time.time()
-    for i in range(num):
-        s=time.time()
-        print('augumenting image:',i)
-        img=tf.convert_to_tensor(data[i],dtype=tf.float32)
-        img=tf.reshape(img,[256,256,1])
-        l=tf.convert_to_tensor(label[i],dtype=tf.float32)
-        data_aug[j]=img.eval()
-        label_aug[j]=l.eval()
-        j=j+1
-        
-        img1=tf.image.transpose_image(img)    #对角线翻转 
-        data_aug[j]=img1.eval()
-        label_aug[j]=l.eval()
-        j=j+1
-        
-        img2=tf.image.random_flip_left_right(img)   #随机左右翻转 
-        data_aug[j]=img2.eval()
-        label_aug[j]=l.eval()
-        j=j+1
-        
-        img3=tf.image.random_flip_up_down(img)      #随机上下翻转
-        data_aug[j]=img3.eval()
-        label_aug[j]=l.eval()
-        j=j+1
-        print('finished image:',i,'time:',time.time()-s)
-
-    if j!=num*4:
-        print('error!!!!!!\n\n')
-    print('data augmenting is finished','it take time:',time.time()-start)
-    return data_aug,label_aug
 
 
 
+'''   
 train,train_label,valid,valid_label=sample(training_data,training_label,2800,2500/3000,2500/300)
 train=train.reshape(2800,256*256)
 valid=valid.reshape(200,256*256)
+'''
+
 
 #training_data=training_data.reshape(3000,256*256)
 
-sess = tf.InteractiveSession()
-train_aug,train_label_aug=image_augment(train,train_label,2800)
 
 
+import tensorflow as tf
+import time
 
 
 def variable_weight(shape,stddev):
@@ -235,14 +196,14 @@ def training_func(data,label,valid,valid_label,turn):
     bias4 = tf.Variable(tf.constant(0.1,shape=[128]))
     fc1 = tf.nn.relu(tf.matmul(reshape_pool3,weight4) + bias4)
     fc1_drop = tf.nn.dropout(fc1,keep_prob)
-    wl4 = 0.004
+    wl4 = 0.04
     weight4_loss = tf.multiply(tf.nn.l2_loss(weight4),wl4)
 
     # #########fc2
     weight5 = variable_weight([128,64], stddev=0.04)
     bias5 = tf.Variable(tf.constant(0.1,shape=[64]))
     fc2 = tf.nn.relu(tf.matmul(fc1_drop,weight5) + bias5)
-    wl5 = 0.004
+    wl5 = 0.04
     weight5_loss = tf.multiply(tf.nn.l2_loss(weight5),wl5)
     
     # #########softmax
@@ -274,7 +235,7 @@ def training_func(data,label,valid,valid_label,turn):
     print('begin trianing .......')
 
     start_time=time.time()
-    max_steps=2000
+    max_steps=3000
     for i in range(max_steps):
         #b_data,b_label=next_batch(training_data,training_label,batch_size)
         b_data,b_label=next_batch(data,label,batch_size)
@@ -300,7 +261,7 @@ def training_func(data,label,valid,valid_label,turn):
     return count/valid.shape[0]
 
 
-train_num=20
+train_num=50
 accuracy_total=np.zeros((train_num))
 for i in range(train_num):
                                     
