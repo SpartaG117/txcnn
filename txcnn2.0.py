@@ -2,6 +2,8 @@ import pickle
 import numpy as np
 import cv2 as cv
 import random
+import tensorflow as tf
+import time
 def unpickle(file):
     with open(file,'rb') as f:
         data=np.array([])
@@ -46,6 +48,17 @@ def read_serialize_test_data():
         j=j+1      
 
 
+        
+def read_aug_data():
+    data=np.zeros((12000,256,256))
+    for i in range(6):
+        print('read pickle'+str(i))
+        s=time.time()
+        data[i*2000:(i+1)*2000]=unpickle('./data/training_data_aug'+str(i)+'.pkl')
+        print('time:',time.time()-s)
+    return data
+        
+        
 def dense_to_one_hot(labels_dense, num_classes):
   """Convert class labels from scalars to one-hot vectors."""
   num_labels = labels_dense.shape[0]
@@ -62,10 +75,13 @@ training_label=unpickle('./data/training_label.pkl')
 #training_id=unpickle('./data/training_id.pkl')
 training_label=dense_to_one_hot(training_label,2)
 training_data=unpickle('./data/training_data.pkl')
+training_data_aug = read_aug_data()
+training_label_aug = unpickle('./data/training_label_aug.pkl')
 
 
 
-def sample(data,label,num_samples,positive_ratio,positive_negative_sample_ratio=1.0):
+
+def sample(data,label,data_aug,label_aug,num_samples,positive_ratio,positive_negative_sample_ratio=1.0):
     print('sampling....')
     num_sample_negatives=int(num_samples/(1+positive_negative_sample_ratio))
     num_sample_positives=int(num_sample_negatives * positive_negative_sample_ratio)
@@ -75,20 +91,28 @@ def sample(data,label,num_samples,positive_ratio,positive_negative_sample_ratio=
     index_sample = index_sample_positives + index_sample_negatives
     index_sample.sort()
     
-    training_sample=np.zeros((num_samples,data.shape[1],data.shape[2]))
-    training_sample_label=np.zeros((num_samples,2))
+    #print(int(data.shape[0]*positive_ratio))
+    
+    training_sample=np.zeros((num_samples*4,data.shape[1],data.shape[2]))
+    training_sample_label=np.zeros((num_samples*4,2))
     test_sample=np.zeros((data.shape[0]-num_samples,data.shape[1],data.shape[2]))
     test_sample_label=np.zeros((data.shape[0]-num_samples,2))
     
     j=0
     for i in index_sample:
-        training_sample[j]=data[i]
-        training_sample_label[j]=label[i]
-        #print('finish',str(j))
+        training_sample[j]=data_aug[i*4]
+        training_sample_label[j]=label_aug[i*4]
         j=j+1
+        for k in range(3):
+            training_sample[j]=data_aug[i*4+1+k]
+            training_sample_label[j]=label_aug[i*4+1+k]
+            j=j+1
+        
+    #print('j',j)    
         
     #print(training_sample.shape)
-    #print(training_sample_label)
+    #a=training_sample_label[9999:10010]
+    
     index_test=list(range(data.shape[0]-num_samples))
     j=0
     k=0
@@ -113,8 +137,8 @@ def sample(data,label,num_samples,positive_ratio,positive_negative_sample_ratio=
         
 def next_batch(data,label,batch_size):
     num_data=data.shape[0]
-    index1=random.sample(range(2500),int(batch_size/2))
-    index2=random.sample(range(2500,2800),int(batch_size/2))
+    index1=random.sample(range(10000),int(batch_size*0.3))
+    index2=random.sample(range(10000,11200),int(batch_size*0.7))
     batch_data=np.zeros((batch_size,256*256))
     batch_label=np.zeros((batch_size,2))
     j=0
@@ -143,8 +167,7 @@ valid=valid.reshape(200,256*256)
 
 
 
-import tensorflow as tf
-import time
+
 
 
 def variable_weight(shape,stddev):
@@ -196,14 +219,14 @@ def training_func(data,label,valid,valid_label,turn):
     bias4 = tf.Variable(tf.constant(0.1,shape=[128]))
     fc1 = tf.nn.relu(tf.matmul(reshape_pool3,weight4) + bias4)
     fc1_drop = tf.nn.dropout(fc1,keep_prob)
-    wl4 = 0.04
+    wl4 = 0.0004
     weight4_loss = tf.multiply(tf.nn.l2_loss(weight4),wl4)
 
     # #########fc2
     weight5 = variable_weight([128,64], stddev=0.04)
     bias5 = tf.Variable(tf.constant(0.1,shape=[64]))
     fc2 = tf.nn.relu(tf.matmul(fc1_drop,weight5) + bias5)
-    wl5 = 0.04
+    wl5 = 0.0004
     weight5_loss = tf.multiply(tf.nn.l2_loss(weight5),wl5)
     
     # #########softmax
@@ -214,7 +237,9 @@ def training_func(data,label,valid,valid_label,turn):
     
     cross_entropy = tf.reduce_mean(-tf.reduce_sum(y*output,reduction_indices=[1])) + weight4_loss +weight5_loss
     
-    trian_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
+    train_step1 = tf.train.AdamOptimizer(1e-2).minimize(cross_entropy)
+    train_step2 = tf.train.AdamOptimizer(1e-3).minimize(cross_entropy)
+    train_step3 = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
 
     #valid test
     correct_prediction = tf.equal(tf.argmax(y,1),tf.argmax(output,1))
@@ -235,20 +260,55 @@ def training_func(data,label,valid,valid_label,turn):
     print('begin trianing .......')
 
     start_time=time.time()
+    '''
+    for i in range(112):
+        trian_step1.run(feed_dict={x:data[i*100:(i+1)*100],y:label[i*100:(i+1)*100],keep_prob:0.5})
+        c=cross_entropy.eval(feed_dict={x:data[i*100:(i+1)*100],y:label[i*100:(i+1)*100],keep_prob:0.5})
+        print('turn ',turn,'iter '+str(i+1),'cross_entropy:',c)
+    ''' 
+
+# ##########################train1  
+    '''
     max_steps=3000
+    
     for i in range(max_steps):
         #b_data,b_label=next_batch(training_data,training_label,batch_size)
         b_data,b_label=next_batch(data,label,batch_size)
-        trian_step.run(feed_dict={x:b_data,y:b_label,keep_prob:0.5})
-        c=cross_entropy.eval(feed_dict={x:b_data,y:b_label,keep_prob:0.5})
-        print('turn ',turn,'iter '+str(i+1),'cross_entropy:',c)
-       
-        #if (i>2000)and(c<=0.23):
-        #    break
+        train_step1.run(feed_dict={x:b_data,y:b_label,keep_prob:1.0})
+        c=cross_entropy.eval(feed_dict={x:b_data,y:b_label,keep_prob:1.0})
+        print('turn ',turn,'iter '+str(j+1),'cross_entropy:',c)
+        j=j+1
+    '''
+        
+# ##########################train1   
+    j = 0
+    max_steps=4000
+    for i in range(max_steps):
+        #b_data,b_label=next_batch(training_data,training_label,batch_size)
+        b_data,b_label=next_batch(data,label,batch_size)
+        train_step2.run(feed_dict={x:b_data,y:b_label,keep_prob:1.0})
+        c=cross_entropy.eval(feed_dict={x:b_data,y:b_label,keep_prob:1.0})
+        print('turn ',turn,'iter '+str(j+1),'cross_entropy:',c)
+        j=j+1
+
+# ##########################train2     
+    
+    max_steps=8000
+    
+    for i in range(max_steps):
+        #b_data,b_label=next_batch(training_data,training_label,batch_size)
+        b_data,b_label=next_batch(data,label,batch_size)
+        train_step3.run(feed_dict={x:b_data,y:b_label,keep_prob:1.0})
+        c=cross_entropy.eval(feed_dict={x:b_data,y:b_label,keep_prob:1.0})
+        print('turn ',turn,'iter '+str(j+1),'cross_entropy:',c)
+        j=j+1
+        
+        
 
     print('training finished  takes time',time.time()-start_time)
-
-    # ###########valid
+    
+       
+#  #######################################valid
 
     count=0
     for i in range(2):
@@ -258,6 +318,19 @@ def training_func(data,label,valid,valid_label,turn):
         
     print('valid accuracy:  ',count/valid.shape[0])
     
+# ######################################  
+    '''
+    count1=0
+    c=0
+    for i in range(112):
+        accuracy = accuracy_count.eval(feed_dict={x:data[i*100:(i+1)*100],y:label[i*100:(i+1)*100],keep_prob:1.0})
+        count1 = count1 + accuracy
+        c=c+100
+    print(c,count1)                                                     
+    print('\n\n\n\n\n\ntrain accuracy:  ',count1/c)
+    '''
+    
+    
     return count/valid.shape[0]
 
 
@@ -265,8 +338,8 @@ train_num=50
 accuracy_total=np.zeros((train_num))
 for i in range(train_num):
                                     
-    train,train_label,valid,valid_label=sample(training_data,training_label,2800,2500/3000,2500/300)
-    train=train.reshape(2800,256*256)
+    train,train_label,valid,valid_label=sample(training_data,training_label,training_data_aug,training_label_aug,2800,2600/3000,2500/300)
+    train=train.reshape(11200,256*256)
     valid=valid.reshape(200,256*256)
     accuracy_total[i] = training_func(train,train_label,valid,valid_label,i+1)
 
