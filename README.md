@@ -31,16 +31,15 @@ Adam初始学习率1e-4
 resnet152，torchvison.models中调用自动下载，imagenet预训练
 
 # 请确保data目录结构如下
-
- |--data 
-    |-- DatasetA
-            |-- train
-            |-- test
-            |-- train.txt
-            |-- test.txt
-            |-- submit.txt
-    |-- DatasetB
-            |-- train
-            |-- test
-            |-- train.txt
-            |-- test.txt
+    |--data
+        |-- DatasetA
+                |-- train
+                |-- test
+                |-- train.txt
+                |-- test.txt
+                |-- submit.txt
+        |-- DatasetB
+                |-- train
+                |-- test
+                |-- train.txt
+                |-- test.txt
